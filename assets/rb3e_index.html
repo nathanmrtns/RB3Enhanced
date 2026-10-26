@@ -231,6 +231,53 @@
             border-color: #2980b9;
         }
 
+        /* Songs / Artists tabs */
+        .tabs {
+            display: flex;
+            gap: 10px;
+            margin-top: 5px;
+        }
+
+        .tab {
+            padding: 8px 20px;
+            border-radius: 5px;
+            border: 1px solid #ecf0f1;
+            background: transparent;
+            color: #ecf0f1;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .tab.active {
+            background-color: #ecf0f1;
+            color: #517497;
+        }
+
+        /* "Showing songs by X" chip */
+        .artist-filter {
+            display: none;
+            margin-top: 15px;
+            align-items: center;
+            gap: 10px;
+            color: #ecf0f1;
+        }
+
+        .artist-filter button {
+            padding: 5px 10px;
+            border-radius: 5px;
+            border: 1px solid #ecf0f1;
+            background: transparent;
+            color: #ecf0f1;
+            cursor: pointer;
+        }
+
+        .acount {
+            color: #888;
+            font-size: 14px;
+            margin-left: 10px;
+        }
+
         @media (prefers-color-scheme: dark) {
             body {
                 color: #ecf0f1;
@@ -295,6 +342,14 @@
             .centered-message {
                 color: #ecf0f1;
             }
+
+            .acount {
+                color: #aaa;
+            }
+
+            .tab.active {
+                color: #1a252f;
+            }
         }
     </style>
     <script>
@@ -308,6 +363,9 @@
         let albumArtCache = {};
         let unfilteredQueuePaused = false;
         let unfilteredAlbumArtQueue = [];
+        let artist_list = [];
+        let currentView = 'songs';
+        let artistFilter = null;
 
         function saveApiKey() {
             const apiKeyInput = document.getElementById("apiKeyInput").value;
@@ -369,7 +427,13 @@
 
             const songDetails = document.createElement('div');
             songDetails.className = 'song-details';
-            songDetails.innerHTML = `<h3 class="sname">${song.title}</h3><span class="artist">${song.artist}</span>`;
+            const songTitle = document.createElement('h3');
+            songTitle.className = 'sname';
+            songTitle.textContent = song.title;
+            const songArtist = document.createElement('span');
+            songArtist.className = 'artist';
+            songArtist.textContent = song.artist;
+            songDetails.append(songTitle, songArtist);
 
             const sbuttons = document.createElement('div');
             sbuttons.className = 'sbuttons';
@@ -419,6 +483,113 @@
             AddSongCountToList(song_list.length);
         }
 
+        function ArtistName(song) {
+            return song.artist || 'Unknown Artist';
+        }
+
+        function BuildArtistList() {
+            const counts = new Map();
+            song_list.forEach(song => {
+                const name = ArtistName(song);
+                counts.set(name, (counts.get(name) || 0) + 1);
+            });
+            artist_list = [...counts].map(([name, count]) => ({ name, count }))
+                .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
+        }
+
+        function RenderArtists() {
+            const table = document.getElementById('artistlisttable');
+            const term = document.getElementById('searchbox').value.toLowerCase();
+            table.innerHTML = '';
+
+            const addRow = (child) => {
+                const row = document.createElement('tr');
+                row.className = 'stb';
+                const cell = document.createElement('td');
+                cell.className = 'sinfo';
+                cell.appendChild(child);
+                row.appendChild(cell);
+                table.appendChild(row);
+            };
+
+            if (song_list.length === 0) {
+                const msg = document.createElement('span');
+                msg.className = 'centered-message';
+                msg.textContent = 'Load the song list from the Songs tab first.';
+                addRow(msg);
+                return;
+            }
+
+            const results = artist_list.filter(a => a.name.toLowerCase().includes(term));
+            const summary = document.createElement('span');
+            summary.className = 'centered-message';
+            summary.textContent = `Showing ${results.length} artists!`;
+            addRow(summary);
+
+            results.forEach(artist => {
+                const details = document.createElement('div');
+                details.className = 'song-details';
+                const name = document.createElement('h3');
+                name.className = 'sname';
+                name.textContent = artist.name;
+                const count = document.createElement('span');
+                count.className = 'artist';
+                count.textContent = artist.count === 1 ? '1 song' : `${artist.count} songs`;
+                details.append(name, count);
+
+                const buttons = document.createElement('div');
+                buttons.className = 'sbuttons';
+                const viewButton = document.createElement('button');
+                viewButton.className = 'button bmain';
+                viewButton.textContent = 'View songs';
+                viewButton.onclick = () => ShowArtist(artist.name);
+                buttons.appendChild(viewButton);
+
+                const wrap = document.createElement('div');
+                wrap.style.display = 'flex';
+                wrap.style.alignItems = 'center';
+                wrap.style.width = '100%';
+                wrap.append(details, buttons);
+                addRow(wrap);
+            });
+        }
+
+        function UpdateArtistFilterChip() {
+            const chip = document.getElementById('artistfilter');
+            if (artistFilter === null) {
+                chip.style.display = 'none';
+                return;
+            }
+            document.getElementById('artistfiltername').textContent = `Songs by ${artistFilter}`;
+            chip.style.display = 'flex';
+        }
+
+        function SwitchView(view) {
+            currentView = view;
+            document.getElementById('songlisttable').style.display = view === 'songs' ? '' : 'none';
+            document.getElementById('artistlisttable').style.display = view === 'artists' ? '' : 'none';
+            document.getElementById('tab-songs').classList.toggle('active', view === 'songs');
+            document.getElementById('tab-artists').classList.toggle('active', view === 'artists');
+            if (view === 'artists') {
+                RenderArtists();
+            } else if (song_list.length > 0) {
+                DoSearch();
+            }
+        }
+
+        function ShowArtist(name) {
+            artistFilter = name;
+            document.getElementById('searchbox').value = '';
+            UpdateArtistFilterChip();
+            SwitchView('songs');
+        }
+
+        function ClearArtistFilter() {
+            artistFilter = null;
+            UpdateArtistFilterChip();
+            DoSearch();
+        }
+
         function FetchSongList() {
             document.getElementById('songlistbutton').style.display = 'none';
             document.getElementById('songloadingbox').style.display = 'block';
@@ -427,6 +598,7 @@
                 .then(data => {
                     originalSongListINI = data;
                     ParseSongList(data);
+                    BuildArtistList();
                 });
         }
 
@@ -435,10 +607,14 @@
         }
 
         function DoSearch() {
+            if (currentView === 'artists') {
+                RenderArtists();
+                return;
+            }
             const search_term = document.getElementById('searchbox').value.toLowerCase();
 
             // Check if the search term is empty
-            if (search_term === '') {
+            if (search_term === '' && artistFilter === null) {
                 // If the search term is empty, display the unfiltered list
                 unfilteredQueuePaused = false;
                 albumArtQueue = [...unfilteredAlbumArtQueue];
@@ -477,9 +653,10 @@
 
                 // Filter the song list based on the search term
                 const searchResults = song_list.filter(song =>
-                    song.title.toLowerCase().includes(search_term) ||
-                    song.artist.toLowerCase().includes(search_term) ||
-                    (song.album && song.album.toLowerCase().includes(search_term))
+                    (artistFilter === null || ArtistName(song) === artistFilter) &&
+                    (song.title.toLowerCase().includes(search_term) ||
+                        ArtistName(song).toLowerCase().includes(search_term) ||
+                        (song.album && song.album.toLowerCase().includes(search_term)))
                 );
 
                 // Display the filtered list
@@ -630,6 +807,14 @@
         <div class="input-container">
             <input id="searchbox" type="text" placeholder="Search songs, artists, albums..." />
         </div>
+        <div class="tabs">
+            <button id="tab-songs" class="tab active" onclick="SwitchView('songs')">Songs</button>
+            <button id="tab-artists" class="tab" onclick="SwitchView('artists')">Artists</button>
+        </div>
+        <div id="artistfilter" class="artist-filter">
+            <span id="artistfiltername"></span>
+            <button onclick="ClearArtistFilter()">Show all</button>
+        </div>
     </div>
     <table id="songlisttable" class="songlist" cellspacing="0">
         <tr id="songlistbutton">
@@ -647,6 +832,7 @@
             </td>
         </tr>
     </table>
+    <table id="artistlisttable" class="songlist" cellspacing="0" style="display: none;"></table>
 </body>
 
 </html>
